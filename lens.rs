@@ -1,22 +1,51 @@
 
-trait Lensable {
+pub trait Lensable {
     type Input;
     type Output;
 }
 
-trait Getter: Lensable {
+
+pub type GetFun<D, A> = dyn Fn(&D) -> A;
+
+pub trait Getter: Lensable {
     fn get(&self, &<Self as Lensable>::Input) -> <Self as Lensable>::Output;
 }
 
-trait Setter: Lensable {
+impl<D, A> Lensable for dyn Fn(&D) -> A {
+    type Input = D;
+    type Output = A;
+}
+
+impl<D, A> Lensable for dyn Fn(&mut D, A) {
+    type Input = D;
+    type Output = A;
+}
+
+impl<D, A> Getter for dyn Fn(&D) -> A {
+    fn get(&self, d: &D) -> A {
+        return (self)(d);
+    }
+}
+
+
+pub type SetFun<D, A> = dyn Fn(&mut D, A);
+
+pub trait Setter: Lensable {
     fn set(&self, &mut <Self as Lensable>::Input, <Self as Lensable>::Output);
 }
 
-pub type GetFun<D, A> = dyn Fn(&D) -> A;
-pub type SetFun<D, A> = dyn Fn(&mut D, A);
+impl<D, A> Setter for dyn Fn(&mut D, A) {
+    fn set(&self, d: &mut D, a: A) {
+        return (self)(d, a);
+    }
+}
+
 
 mod lens_box {
     use {Lensable, Getter, Setter, SetFun, GetFun};
+
+    pub trait Optical : Lensable + Getter + Setter {
+    }
 
     pub struct Lens<D, A> {
         pub getter: Box<GetFun<D, A>>,
@@ -26,6 +55,63 @@ mod lens_box {
     impl<D, A> Lens<D, A> {
         pub fn new(getter: Box<GetFun<D, A>>, setter: Box<SetFun<D, A>>) -> Self {
             return Lens { getter, setter };
+        }
+    }
+
+    impl<D, A> Lensable for Lens<D, A> {
+        type Input = D;
+        type Output = A;
+    }
+
+    impl<D, A> Getter for Lens<D, A> {
+        fn get(&self, d: &D) -> A {
+            return (self.getter)(d);
+        }
+    }
+
+    impl<D, A> Setter for Lens<D, A> {
+        fn set(&self, d: &mut D, a: A) {
+            return (self.setter)(d, a);
+        }
+    }
+
+    impl<D, A> Optical for Lens<D, A> {
+    }
+
+    pub struct ComposedLens<D, A, B> {
+        pub lhs: Box<dyn Optical<Input=D, Output=A>>,
+        pub rhs: Box<dyn Optical<Input=A, Output=B>>,
+    }
+
+    impl<D, A, B> ComposedLens<D, A, B> {
+        pub fn new(l1: Box<dyn Optical<Input = D, Output = A>>,
+                   l2: Box<dyn Optical<Input = A, Output = B>>) -> Self {
+            return ComposedLens {
+                lhs: l1,
+                rhs: l2,
+            };
+        }
+    }
+
+    impl<D, A, B> Lensable for ComposedLens<D, A, B> {
+        type Input = D;
+        type Output = B;
+    }
+
+    impl<D, A, B> Getter for ComposedLens<D, A, B> {
+        fn get(&self, d: &D) -> B {
+            return self.rhs.get(&self.lhs.get(d));
+        }
+    }
+
+    impl<D, A, B> Optical for ComposedLens<D, A, B> {
+    }
+
+    impl<D, A, B> Setter for ComposedLens<D, A, B> {
+        fn set(&self, d: &mut D, b: B) {
+            let mut val = self.lhs.get(d);
+            self.rhs.set(&mut val, b);
+            self.lhs.set(d, val);
         }
     }
 }
@@ -219,6 +305,42 @@ fn set_bool(d: &mut u8, a: bool) {
 
 fn main() {
     {
+        println!("Composed Boxed Lens");
+        let mut d: u32 = 0;
+
+        let optic: lens_box::Lens<u32, u8> =
+            lens_box::Lens::new(Box::new(get_first_byte),
+                                Box::new(set_first_byte));
+
+        let optic2: lens_box::Lens<u8, bool> =
+            lens_box::Lens::new(Box::new(get_bool), Box::new(set_bool));
+
+        let optic3 =
+            lens_box::ComposedLens::new(Box::new(optic), Box::new(optic2));
+        println!("{:X}", d);
+        optic3.set(&mut d, false);
+        println!("{}", optic3.get(&d));
+        optic3.set(&mut d, true);
+        println!("{}", optic3.get(&d));
+        println!("{:X}", d);
+    }
+
+    {
+        println!("Boxed Lens");
+        let func: lens_box::Lens<u8, u8>
+            = lens_box::Lens::new(Box::new(|d: &u8| d & 0x01),
+                                  Box::new(|d: &mut u8, a: u8| *d = (*d & 0x0E) | a));
+
+        let mut d: u8 = 0;
+        func.set(&mut d, 1);
+        println!("{}", func.get(&d));
+        func.set(&mut d, 0);
+        println!("{}", func.get(&d));
+    }
+
+    println!("_____________");
+
+    {
         println!("Composed Lens");
         let mut d: u32 = 0;
 
@@ -246,7 +368,11 @@ fn main() {
         let mut d: u8 = 0;
         func.set(&mut d, 1);
         println!("{}", func.get(&d));
+        func.set(&mut d, 0);
+        println!("{}", func.get(&d));
     }
+
+    println!("_____________");
 
     {
         println!("Composed Optic");
@@ -279,5 +405,6 @@ fn main() {
         optic.set(&mut d, 1);
         println!("{}", optic.get(&d));
     }
+    println!("_____________");
 }
 
