@@ -1,14 +1,17 @@
-use std::boxed::*;
-
-
+/// The Lensable trait allows types to
+/// carry around an Input and Output associated type.
 pub trait Lensable {
     type Input;
     type Output;
 }
 
 
+/// The GetFun type is for getters. These getters produce a
+/// A from a reference to a D.
 pub type GetFun<D, A> = dyn Fn(&D) -> A;
 
+/// The Getter trait is for anything which can get an Output type from
+/// a refernence to an Input type.
 pub trait Getter: Lensable {
     fn get(&self, d: &<Self as Lensable>::Input) -> <Self as Lensable>::Output;
 }
@@ -30,8 +33,12 @@ impl<D, A> Getter for dyn Fn(&D) -> A {
 }
 
 
+/// The SetFun type is for setters. Note that these setters mutate
+/// the value of type D in-place.
 pub type SetFun<D, A> = dyn Fn(&mut D, A);
 
+/// The Setter trait is for types that can modify a given value of type Input
+/// with a value of type Outpyt.
 pub trait Setter: Lensable {
     fn set(&self, d: &mut <Self as Lensable>::Input, a: <Self as Lensable>::Output);
 }
@@ -43,9 +50,12 @@ impl<D, A> Setter for dyn Fn(&mut D, A) {
 }
 
 
+/// The lens_box module contains an implementation of lenses using boxed trait objects.
 pub mod lens_box {
     use crate::{Lensable, Getter, Setter, SetFun, GetFun};
 
+    /// The Optical trait is necessary to carry around trait objects satisfying
+    /// multiple traits.
     pub trait Optical : Lensable + Getter + Setter {
     }
 
@@ -118,10 +128,26 @@ pub mod lens_box {
     }
 }
 
+/// The lens module contains the main implementation of the lens concept
+/// as a pair of getter and setter closures. It appears to inline
+/// well and is by far the fastest in the micro-benchmarks.
+///
+/// Note that lens does require closure types, which are unnamable.
+/// I have not been able to implement this module without them, so
+/// users will have to use type inference, or partially specify types like
+/// ```Rust
+/// let lens: Lens<_, _, u32, u8> =
+/// ```
+/// to specify a lense from a u32 to a u8, for example.
 pub mod lens {
     use crate::{Lensable, Getter, Setter};
     use std::marker::PhantomData;
 
+    // NOTE I was not able to get rid of D and A even though they are
+    // available through the Lensable impl because they are required
+    // to implement Lensable and are not constrained in the implementation.
+    // This causes a compilation error, requiring me to carry them
+    // around as type parameters with PhantomData fields instead.
     pub struct Lens<G, S, D, A> {
         pub getter: G,
         pub setter: S,
@@ -198,6 +224,13 @@ pub mod lens {
     }
 }
 
+/// The lens_fn module contains an implementation of lens as getter/setter
+/// pairs using function pointers (fn in Rust). This was intended as a kind
+/// of control in the benchmarking to see if Box incurred penality vs
+/// regular functions.
+/// It appears that there is no reason to use lens_fn- its no faster then
+/// boxed trait objects and requires separate functions for each getter/setter
+/// instead of allowing boxed closures like lens_box.
 pub mod lens_fn {
     use crate::{Lensable, Getter, Setter};
 
@@ -233,8 +266,6 @@ pub mod lens_fn {
         }
     }
 
-    // TODO attempt at implementing traits for ComposedLens
-    // requires generic parameters that implement traits themselves.
     pub struct ComposedLens<O, O2> {
         pub lhs: O,
         pub rhs: O2,
@@ -275,131 +306,3 @@ pub mod lens_fn {
     }
 }
 
-
-fn get_first_byte(d: &u32) -> u8 {
-    return (d & 0xFF) as u8;
-}
-
-fn set_first_byte(d: &mut u32, a: u8) {
-    *d = (*d & 0xFFFFFF00) | (a as u32);
-}
-
-fn get_bool(d: &u8) -> bool {
-    return (d & 0x01) == 0x01;
-}
-
-fn set_bool(d: &mut u8, a: bool) {
-    let val = if a {
-        1 
-    } else {
-        0
-    };
-    *d = (*d & 0xFE) | val;
-}
-
-/*
-fn main() {
-    {
-        println!("Composed Boxed Lens");
-        let mut d: u32 = 0;
-
-        let optic: lens_box::Lens<u32, u8> =
-            lens_box::Lens::new(Box::new(get_first_byte),
-                                Box::new(set_first_byte));
-
-        let optic2: lens_box::Lens<u8, bool> =
-            lens_box::Lens::new(Box::new(get_bool), Box::new(set_bool));
-
-        let optic3 =
-            lens_box::ComposedLens::new(Box::new(optic), Box::new(optic2));
-        println!("{:X}", d);
-        optic3.set(&mut d, false);
-        println!("{}", optic3.get(&d));
-        optic3.set(&mut d, true);
-        println!("{}", optic3.get(&d));
-        println!("{:X}", d);
-    }
-
-    {
-        println!("Boxed Lens");
-        let func: lens_box::Lens<u8, u8>
-            = lens_box::Lens::new(Box::new(|d: &u8| d & 0x01),
-                                  Box::new(|d: &mut u8, a: u8| *d = (*d & 0x0E) | a));
-
-        let mut d: u8 = 0;
-        func.set(&mut d, 1);
-        println!("{}", func.get(&d));
-        func.set(&mut d, 0);
-        println!("{}", func.get(&d));
-    }
-
-    println!("_____________");
-
-    {
-        println!("Composed Lens");
-        let mut d: u32 = 0;
-
-        let optic: lens::Lens<_, _, u32, u8> =
-            lens::Lens::new(get_first_byte, set_first_byte);
-
-        let optic2: lens::Lens<_, _, u8, bool> =
-            lens::Lens::new(get_bool, set_bool);
-
-        let optic3 = lens::ComposedLens::new(optic, optic2);
-        println!("{:X}", d);
-        optic3.set(&mut d, false);
-        println!("{}", optic3.get(&d));
-        optic3.set(&mut d, true);
-        println!("{}", optic3.get(&d));
-        println!("{:X}", d);
-    }
-
-    {
-        println!("Lens");
-        let func: lens::Lens<_, _, u8, u8>
-            = lens::Lens::new(|d: &u8| d & 0x01,
-                        |d: &mut u8, a: u8| *d = (*d & 0x0E) | a);
-
-        let mut d: u8 = 0;
-        func.set(&mut d, 1);
-        println!("{}", func.get(&d));
-        func.set(&mut d, 0);
-        println!("{}", func.get(&d));
-    }
-
-    println!("_____________");
-
-    {
-        println!("Composed Optic");
-        let mut d: u32 = 0;
-
-        let optic: lens_fn::Lens<u32, u8> =
-            lens_fn::Lens::new(get_first_byte, set_first_byte);
-
-        let optic2: lens_fn::Lens<u8, bool> =
-            lens_fn::Lens::new(get_bool, set_bool);
-
-        let optic3 = lens_fn::ComposedLens::new(optic, optic2);
-        println!("{:X}", d);
-        optic3.set(&mut d, false);
-        println!("{}", optic3.get(&d));
-        optic3.set(&mut d, true);
-        println!("{}", optic3.get(&d));
-        println!("{:X}", d);
-    }
-
-    {
-        println!("Optic");
-
-        let mut d: u8 = 0;
-        let optic: lens_fn::Lens<u8, u8> =
-            lens_fn::Lens::new(get_bit, set_bit);
-
-        optic.set(&mut d, 0);
-        println!("{}", optic.get(&d));
-        optic.set(&mut d, 1);
-        println!("{}", optic.get(&d));
-    }
-    println!("_____________");
-}
-*/
