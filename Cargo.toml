@@ -5,6 +5,7 @@ authors = ["nsmryan <nsmryan@gmail.com>"]
 edition = "2018"
 license = "MIT"
 repository = "https://github.com/nsmryan/myopic"
+keywords = ["fp", "lens"]
 
 [dependencies]
 
