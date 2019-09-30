@@ -1,3 +1,5 @@
+use std::boxed::*;
+
 
 pub trait Lensable {
     type Input;
@@ -8,7 +10,7 @@ pub trait Lensable {
 pub type GetFun<D, A> = dyn Fn(&D) -> A;
 
 pub trait Getter: Lensable {
-    fn get(&self, &<Self as Lensable>::Input) -> <Self as Lensable>::Output;
+    fn get(&self, d: &<Self as Lensable>::Input) -> <Self as Lensable>::Output;
 }
 
 impl<D, A> Lensable for dyn Fn(&D) -> A {
@@ -31,7 +33,7 @@ impl<D, A> Getter for dyn Fn(&D) -> A {
 pub type SetFun<D, A> = dyn Fn(&mut D, A);
 
 pub trait Setter: Lensable {
-    fn set(&self, &mut <Self as Lensable>::Input, <Self as Lensable>::Output);
+    fn set(&self, d: &mut <Self as Lensable>::Input, a: <Self as Lensable>::Output);
 }
 
 impl<D, A> Setter for dyn Fn(&mut D, A) {
@@ -41,8 +43,8 @@ impl<D, A> Setter for dyn Fn(&mut D, A) {
 }
 
 
-mod lens_box {
-    use {Lensable, Getter, Setter, SetFun, GetFun};
+pub mod lens_box {
+    use crate::{Lensable, Getter, Setter, SetFun, GetFun};
 
     pub trait Optical : Lensable + Getter + Setter {
     }
@@ -116,8 +118,8 @@ mod lens_box {
     }
 }
 
-mod lens {
-    use {Lensable, Getter, Setter};
+pub mod lens {
+    use crate::{Lensable, Getter, Setter};
     use std::marker::PhantomData;
 
     pub struct Lens<G, S, D, A> {
@@ -196,8 +198,8 @@ mod lens {
     }
 }
 
-mod lens_simple {
-    use {Lensable, Getter, Setter};
+pub mod lens_fn {
+    use crate::{Lensable, Getter, Setter};
 
     pub struct Lens<D, A> {
         pub getter: fn(&D) -> A,
@@ -274,14 +276,6 @@ mod lens_simple {
 }
 
 
-fn get_bit(d: &u8) -> u8 {
-    return d & 0x01;
-}
-
-fn set_bit(d: &mut u8, a: u8) {
-    *d = (*d & 0xFE) | a;
-}
-
 fn get_first_byte(d: &u32) -> u8 {
     return (d & 0xFF) as u8;
 }
@@ -303,6 +297,7 @@ fn set_bool(d: &mut u8, a: bool) {
     *d = (*d & 0xFE) | val;
 }
 
+/*
 fn main() {
     {
         println!("Composed Boxed Lens");
@@ -378,13 +373,13 @@ fn main() {
         println!("Composed Optic");
         let mut d: u32 = 0;
 
-        let optic: lens_simple::Lens<u32, u8> =
-            lens_simple::Lens::new(get_first_byte, set_first_byte);
+        let optic: lens_fn::Lens<u32, u8> =
+            lens_fn::Lens::new(get_first_byte, set_first_byte);
 
-        let optic2: lens_simple::Lens<u8, bool> =
-            lens_simple::Lens::new(get_bool, set_bool);
+        let optic2: lens_fn::Lens<u8, bool> =
+            lens_fn::Lens::new(get_bool, set_bool);
 
-        let optic3 = lens_simple::ComposedLens::new(optic, optic2);
+        let optic3 = lens_fn::ComposedLens::new(optic, optic2);
         println!("{:X}", d);
         optic3.set(&mut d, false);
         println!("{}", optic3.get(&d));
@@ -397,8 +392,8 @@ fn main() {
         println!("Optic");
 
         let mut d: u8 = 0;
-        let optic: lens_simple::Lens<u8, u8> =
-            lens_simple::Lens::new(get_bit, set_bit);
+        let optic: lens_fn::Lens<u8, u8> =
+            lens_fn::Lens::new(get_bit, set_bit);
 
         optic.set(&mut d, 0);
         println!("{}", optic.get(&d));
@@ -407,4 +402,4 @@ fn main() {
     }
     println!("_____________");
 }
-
+*/
