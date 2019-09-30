@@ -6,6 +6,8 @@ edition = "2018"
 license = "MIT"
 repository = "https://github.com/nsmryan/myopic"
 keywords = ["fp", "lens"]
+readme = "README.md"
+description = "A possibly bad lens library for Rust"
 
 [dependencies]
 
