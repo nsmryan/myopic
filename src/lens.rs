@@ -32,6 +32,11 @@ impl<D, A> Getter for dyn Fn(&D) -> A {
     }
 }
 
+/// The Optical trait is necessary to carry around trait objects satisfying
+/// multiple traits.
+pub trait Optical : Lensable + Getter + Setter {
+}
+
 
 /// The SetFun type is for setters. Note that these setters mutate
 /// the value of type D in-place.
@@ -52,12 +57,7 @@ impl<D, A> Setter for dyn Fn(&mut D, A) {
 
 /// The lens_box module contains an implementation of lenses using boxed trait objects.
 pub mod lens_box {
-    use crate::{Lensable, Getter, Setter, SetFun, GetFun};
-
-    /// The Optical trait is necessary to carry around trait objects satisfying
-    /// multiple traits.
-    pub trait Optical : Lensable + Getter + Setter {
-    }
+    use crate::{Lensable, Getter, Setter, SetFun, GetFun, Optical};
 
     pub struct Lens<D, A> {
         pub getter: Box<GetFun<D, A>>,
