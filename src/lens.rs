@@ -140,7 +140,7 @@ pub mod lens_box {
 /// ```
 /// to specify a lense from a u32 to a u8, for example.
 pub mod lens {
-    use crate::{Lensable, Getter, Setter};
+    use crate::{Lensable, Getter, Setter, Optical};
     use std::marker::PhantomData;
 
     // NOTE I was not able to get rid of D and A even though they are
@@ -172,6 +172,9 @@ pub mod lens {
         fn set(&self, d: &mut D, a: A) {
             return (self.setter)(d, a);
         }
+    }
+
+    impl<G, S, D, A> Optical for Lens<G, S, D, A> {
     }
 
     impl<G, S, D, A> Lens<G, S, D, A> {
@@ -222,6 +225,11 @@ pub mod lens {
             return self.lhs.set(d, val);
         }
     }
+
+    impl<L1, L2> Optical for ComposedLens<L1, L2> 
+        where L1: Optical,
+              L2: Optical {
+    }
 }
 
 /// The lens_fn module contains an implementation of lens as getter/setter
@@ -232,7 +240,7 @@ pub mod lens {
 /// boxed trait objects and requires separate functions for each getter/setter
 /// instead of allowing boxed closures like lens_box.
 pub mod lens_fn {
-    use crate::{Lensable, Getter, Setter};
+    use crate::{Lensable, Getter, Setter, Optical};
 
     pub struct Lens<D, A> {
         pub getter: fn(&D) -> A,
@@ -264,6 +272,9 @@ pub mod lens_fn {
         fn set(&self, d: &mut D, a: A) {
             return (self.setter)(d, a);
         }
+    }
+
+    impl<D, A> Optical for Lens<D, A> {
     }
 
     pub struct ComposedLens<O, O2> {
@@ -303,6 +314,11 @@ pub mod lens_fn {
             self.rhs.set(&mut a, b);
             self.lhs.set(d, a);
         }
+    }
+
+    impl<O, O2> Optical for ComposedLens<O, O2> 
+        where O: Optical,
+              O2: Optical {
     }
 }
 
