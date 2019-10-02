@@ -174,7 +174,9 @@ pub mod lens {
         }
     }
 
-    impl<G, S, D, A> Optical for Lens<G, S, D, A> {
+    impl<G, S, D, A> Optical for Lens<G, S, D, A> 
+        where S: Fn(&mut D, A),
+              G: Fn(&D) -> A {
     }
 
     impl<G, S, D, A> Lens<G, S, D, A> {
@@ -226,9 +228,9 @@ pub mod lens {
         }
     }
 
-    impl<L1, L2> Optical for ComposedLens<L1, L2> 
-        where L1: Optical,
-              L2: Optical {
+    impl<L1, L2, D, A, B> Optical for ComposedLens<L1, L2> 
+        where L1: Optical<Input=D, Output=A>,
+              L2: Optical<Input=A, Output=B> {
     }
 }
 
@@ -316,9 +318,9 @@ pub mod lens_fn {
         }
     }
 
-    impl<O, O2> Optical for ComposedLens<O, O2> 
-        where O: Optical,
-              O2: Optical {
+    impl<O, O2, D, A, B> Optical for ComposedLens<O, O2> 
+        where O: Optical<Input=D, Output=A>,
+              O2: Optical<Input=A, Output=B> {
     }
 }
 
